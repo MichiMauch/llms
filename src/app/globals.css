@@ -1,26 +1,35 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Design System Colors - HSL values for proper CSS variable usage */
+  --background: 220 14% 96%; /* #F9FAFB */
+  --foreground: 0 0% 18%; /* #2E2E2E */
+  --card: 0 0% 100%; /* #FFFFFF */
+  --card-foreground: 0 0% 18%; /* #2E2E2E */
+  --popover: 0 0% 100%; /* #FFFFFF */
+  --popover-foreground: 0 0% 18%; /* #2E2E2E */
+  --primary: 181 61% 51%; /* #34CCCD */
+  --primary-foreground: 0 0% 100%; /* #FFFFFF */
+  --secondary: 220 14% 96%; /* #F3F4F6 */
+  --secondary-foreground: 215 25% 27%; /* #374151 */
+  --muted: 220 14% 96%; /* #F3F4F6 */
+  --muted-foreground: 220 9% 46%; /* #6B7280 */
+  --accent: 220 14% 96%; /* #F3F4F6 */
+  --accent-foreground: 215 25% 27%; /* #374151 */
+  --destructive: 0 73% 71%; /* #FF6B6B */
+  --destructive-foreground: 0 0% 100%; /* #FFFFFF */
+  --border: 220 13% 91%; /* #E5E7EB */
+  --input: 220 14% 96%; /* #F3F4F6 */
+  --ring: 181 61% 51%; /* #34CCCD */
+  --radius: 0.75rem;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  border-color: hsl(var(--border));
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: Inter, system-ui, sans-serif;
 }
