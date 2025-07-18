@@ -34,13 +34,17 @@ export const useCrawlStore = create<CrawlStore>((set) => ({
 
       const { jobId } = await response.json();
       
-      // Start polling for progress
+      // Start polling for progress with retry logic
+      let retryCount = 0;
+      const maxRetries = 3;
+      
       const pollProgress = async () => {
         try {
           const progressResponse = await fetch(`/api/crawl/${jobId}`);
           if (progressResponse.ok) {
             const progress = await progressResponse.json();
             set({ progress });
+            retryCount = 0; // Reset retry count on success
 
             if (progress.status === 'completed' && progress.generatedContent) {
               set({ generatedContent: progress.generatedContent });
@@ -53,19 +57,43 @@ export const useCrawlStore = create<CrawlStore>((set) => ({
               setTimeout(pollProgress, 2000); // Continue polling
             }
           } else if (progressResponse.status === 404) {
-            console.warn(`Job ${jobId} not found on server`);
-            // Job might have been cleaned up, stop polling
-            return;
+            retryCount++;
+            if (retryCount <= maxRetries) {
+              console.warn(`Job ${jobId} not found on server, retrying... (${retryCount}/${maxRetries})`);
+              // Retry after a short delay - job might still be initializing
+              setTimeout(pollProgress, 1000);
+            } else {
+              console.error(`Job ${jobId} not found after ${maxRetries} retries`);
+              set({
+                progress: {
+                  status: 'error',
+                  totalPages: 0,
+                  processedPages: 0,
+                  currentPage: '',
+                  errors: [{ url: request.url, error: 'Job not found on server', timestamp: new Date() }],
+                  estimatedTimeRemaining: 0,
+                  jobId: jobId,
+                },
+              });
+            }
           } else {
             console.error(`Error polling progress: ${progressResponse.status}`);
+            retryCount++;
+            if (retryCount <= maxRetries) {
+              setTimeout(pollProgress, 2000);
+            }
           }
         } catch (error) {
           console.error('Error polling progress:', error);
-          // Stop polling on network errors after some attempts
+          retryCount++;
+          if (retryCount <= maxRetries) {
+            setTimeout(pollProgress, 2000);
+          }
         }
       };
 
-      pollProgress();
+      // Start polling after a brief delay to ensure job is saved in database
+      setTimeout(pollProgress, 500);
     } catch (error) {
       console.error('Error starting crawl:', error);
       set({
