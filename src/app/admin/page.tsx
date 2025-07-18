@@ -3,6 +3,7 @@
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 
 interface CrawlResult {
@@ -91,10 +92,12 @@ export default function AdminDashboard() {
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-3">
                 {session.user?.image && (
-                  <img 
+                  <Image 
                     src={session.user.image} 
                     alt={session.user.name || 'User'} 
-                    className="w-10 h-10 rounded-full border-2 border-gray-200"
+                    width={40}
+                    height={40}
+                    className="rounded-full border-2 border-gray-200"
                   />
                 )}
                 <div className="text-right">
