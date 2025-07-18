@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Error starting crawl:', error);
     return NextResponse.json(
-      { error: 'Failed to start crawling' },
+      { error: 'Failed to start crawling', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }
@@ -70,6 +70,9 @@ async function startCrawling(jobId: string, request: CrawlRequest, clientIP?: st
   
   try {
     console.log(`Starting crawl process for job ${jobId}`);
+    console.log(`Environment check - OpenAI API Key: ${process.env.OPENAI_API_KEY ? 'Present' : 'Missing'}`);
+    console.log(`Environment check - Turso URL: ${process.env.TURSO_DATABASE_URL ? 'Present' : 'Missing'}`);
+    console.log(`Environment check - Turso Token: ${process.env.TURSO_AUTH_TOKEN ? 'Present' : 'Missing'}`);
     const startTime = Date.now();
     
     // Add a maximum timeout to prevent hanging jobs
@@ -146,6 +149,7 @@ async function startCrawling(jobId: string, request: CrawlRequest, clientIP?: st
       console.log(`Job ${jobId} saved to database`);
     } catch (dbError) {
       console.error(`Job ${jobId} database save failed:`, dbError);
+      // Don't fail the whole process if DB save fails
     }
 
     // Mark as completed
@@ -163,6 +167,7 @@ async function startCrawling(jobId: string, request: CrawlRequest, clientIP?: st
 
   } catch (error) {
     console.error(`Error in crawl job ${jobId}:`, error);
+    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
     const currentProgress = crawlJobs.get(jobId);
     if (currentProgress) {
       crawlJobs.set(jobId, {
