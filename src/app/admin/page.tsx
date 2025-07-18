@@ -82,24 +82,41 @@ export default function AdminDashboard() {
         {/* Header */}
         <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
           <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-800">Admin Dashboard</h1>
-              <p className="text-gray-600">Welcome, {session.user?.name}</p>
+            <div className="flex items-center gap-4">
+              <div>
+                <h1 className="text-2xl font-bold text-gray-800">Admin Dashboard</h1>
+                <p className="text-gray-600">Welcome, {session.user?.name}</p>
+              </div>
             </div>
-            <div className="flex gap-4">
-              <Button
-                onClick={() => router.push('/')}
-                variant="outline"
-                className="border-gray-300 hover:bg-gray-50"
-              >
-                Back to Generator
-              </Button>
-              <Button
-                onClick={handleSignOut}
-                className="bg-red-600 hover:bg-red-700"
-              >
-                Sign Out
-              </Button>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-3">
+                {session.user?.image && (
+                  <img 
+                    src={session.user.image} 
+                    alt={session.user.name || 'User'} 
+                    className="w-10 h-10 rounded-full border-2 border-gray-200"
+                  />
+                )}
+                <div className="text-right">
+                  <p className="text-sm font-medium text-gray-800">{session.user?.name}</p>
+                  <p className="text-xs text-gray-500">{session.user?.email}</p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => router.push('/')}
+                  variant="outline"
+                  className="border-gray-300 hover:bg-gray-50"
+                >
+                  Back to Generator
+                </Button>
+                <Button
+                  onClick={handleSignOut}
+                  className="bg-red-600 hover:bg-red-700"
+                >
+                  Sign Out
+                </Button>
+              </div>
             </div>
           </div>
         </div>
