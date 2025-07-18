@@ -92,6 +92,11 @@ export function UrlInput({ onSubmit, isLoading }: UrlInputProps) {
                   setUrl(e.target.value);
                   setUrlError('');
                 }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !isLoading && url.trim()) {
+                    handleSubmit(e);
+                  }
+                }}
                 className={urlError ? 'border-red-500' : ''}
                 disabled={isLoading}
               />
