@@ -2,35 +2,24 @@
 
 import { UrlInput } from '@/components/landing/url-input';
 import { CrawlProgress } from '@/components/progress/crawl-progress';
+import { ContentEditor } from '@/components/editor/content-editor';
 import { useCrawlStore } from '@/stores/crawl-store';
 import { CrawlRequest } from '@/types';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
+import { Button } from '@/components/ui/button';
 
 export default function Home() {
   const { progress, generatedContent, startCrawl, resetCrawl, isStartingNewCrawl } = useCrawlStore();
   const router = useRouter();
 
-  useEffect(() => {
-    // Only redirect if we have a completed job AND we're not starting a new crawl
-    if (progress?.status === 'completed' && generatedContent && progress.jobId && !isStartingNewCrawl) {
-      // Add a small delay to ensure the page has fully loaded
-      const timer = setTimeout(() => {
-        router.replace(`/llms?jobId=${progress.jobId}`);
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [progress, generatedContent, router, isStartingNewCrawl]);
+  // Remove the automatic redirect - we'll show everything on this page
 
   const handleUrlSubmit = (request: CrawlRequest) => {
     startCrawl(request);
   };
 
   const handleCancel = () => {
-    resetCrawl();
-  };
-
-  const handleReset = () => {
     resetCrawl();
   };
 
@@ -41,7 +30,7 @@ export default function Home() {
         <div className="container mx-auto px-4">
           <div className="mb-6 text-center">
             <button
-              onClick={handleReset}
+              onClick={handleCancel}
               className="hover:text-primary-600 underline"
               style={{ color: '#34CCCD' }}
             >
@@ -51,6 +40,32 @@ export default function Home() {
           <CrawlProgress
             progress={progress}
             onCancel={progress.status === 'crawling' || progress.status === 'processing' ? handleCancel : undefined}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // Show results if completed
+  if (progress?.status === 'completed' && generatedContent) {
+    return (
+      <div className="min-h-screen py-8" style={{ background: 'linear-gradient(to bottom right, #E6F9F9, #F9FAFB, #B3F0F0)' }}>
+        <div className="container mx-auto px-4">
+          <div className="mb-6 text-center">
+            <Button
+              onClick={handleCancel}
+              className="hover:text-primary-600 underline"
+              style={{ color: '#34CCCD' }}
+              variant="link"
+            >
+              ← Start a new crawl
+            </Button>
+          </div>
+          <ContentEditor
+            content={generatedContent}
+            onContentChange={(newContent) => {
+              console.log('Content changed:', newContent);
+            }}
           />
         </div>
       </div>

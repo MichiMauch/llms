@@ -263,6 +263,7 @@ WICHTIGE RICHTLINIEN (nach aktuellen llms.txt Best Practices):
 7. KONTAKTDATEN: Falls verfügbar, Kontaktseiten verlinken und grundlegende Erreichbarkeit erwähnen
 8. QUALITÄT VOR QUANTITÄT: Lieber weniger, aber dafür ausführlichere und beschreibende Einträge
 9. Ziel: LLMs sollen den Zweck und Inhalt jeder Sektion sofort verstehen können
+10. SCHWEIZER TASTATUR: Verwende nur Zeichen, die auf einer Schweizer Tastatur verfügbar sind - keine speziellen Anführungszeichen, Gedankenstriche oder andere Sonderzeichen
 
 Website URL: ${websiteUrl}
 
