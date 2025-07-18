@@ -3,6 +3,7 @@
 import { UrlInput } from '@/components/landing/url-input';
 import { CrawlProgress } from '@/components/progress/crawl-progress';
 import { ContentEditor } from '@/components/editor/content-editor';
+import { DomainStatusList } from '@/components/domain-status-list';
 import { useCrawlStore } from '@/stores/crawl-store';
 import { CrawlRequest } from '@/types';
 import { useRouter } from 'next/navigation';
@@ -81,6 +82,11 @@ export default function Home() {
           isLoading={false}
         />
         
+        {/* Domain Status List */}
+        <div className="max-w-4xl mx-auto mt-16">
+          <DomainStatusList />
+        </div>
+
         {/* About section */}
         <div className="max-w-4xl mx-auto mt-16 space-y-8">
           <div className="text-center">

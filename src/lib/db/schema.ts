@@ -27,3 +27,14 @@ export const crawlResults = sqliteTable('crawl_results', {
 
 export type CrawlResult = typeof crawlResults.$inferSelect;
 export type NewCrawlResult = typeof crawlResults.$inferInsert;
+
+export const domainStatus = sqliteTable('domain_status', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  domain: text('domain').notNull().unique(),
+  hasLlmsTxt: integer('has_llms_txt', { mode: 'boolean' }).notNull().default(false),
+  lastChecked: text('last_checked').default(sql`CURRENT_TIMESTAMP`).notNull(),
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export type DomainStatus = typeof domainStatus.$inferSelect;
+export type NewDomainStatus = typeof domainStatus.$inferInsert;
