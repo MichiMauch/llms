@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getJob } from '@/lib/crawl-jobs';
 
+// Extend timeout for Vercel to 60 seconds
+export const maxDuration = 60;
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ jobId: string }> }

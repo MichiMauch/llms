@@ -7,6 +7,9 @@ import { crawlJobs } from '@/lib/crawl-jobs';
 import { getAIGeneratedMarkdown } from '@/lib/openai-generator';
 import { generateLlmsFullTxtMarkdown } from '@/lib/llms-generator';
 
+// Extend timeout for Vercel to 60 seconds
+export const maxDuration = 60;
+
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
