@@ -8,15 +8,19 @@ import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 
 export default function Home() {
-  const { progress, generatedContent, startCrawl, resetCrawl } = useCrawlStore();
+  const { progress, generatedContent, startCrawl, resetCrawl, isStartingNewCrawl } = useCrawlStore();
   const router = useRouter();
 
   useEffect(() => {
-    if (progress?.status === 'completed' && generatedContent && progress.jobId) {
-      // Use replace instead of push to avoid back button issues
-      router.replace(`/llms?jobId=${progress.jobId}`);
+    // Only redirect if we have a completed job AND we're not starting a new crawl
+    if (progress?.status === 'completed' && generatedContent && progress.jobId && !isStartingNewCrawl) {
+      // Add a small delay to ensure the page has fully loaded
+      const timer = setTimeout(() => {
+        router.replace(`/llms?jobId=${progress.jobId}`);
+      }, 100);
+      return () => clearTimeout(timer);
     }
-  }, [progress, generatedContent, router]);
+  }, [progress, generatedContent, router, isStartingNewCrawl]);
 
   const handleUrlSubmit = (request: CrawlRequest) => {
     startCrawl(request);

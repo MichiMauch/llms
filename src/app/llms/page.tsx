@@ -48,7 +48,8 @@ function LlmsPageContent() {
 
   const handleReset = () => {
     resetCrawl();
-    router.replace('/');
+    // Use window.location to force a full page reload and prevent React state issues
+    window.location.href = '/';
   };
 
   if (!generatedContent) {

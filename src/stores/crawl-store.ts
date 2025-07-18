@@ -4,6 +4,7 @@ import { CrawlProgress, CrawlRequest, LlmsTxtContent } from '@/types';
 interface CrawlStore {
   progress: CrawlProgress | null;
   generatedContent: LlmsTxtContent | null;
+  isStartingNewCrawl: boolean;
   
   // Actions
   setCrawlProgress: (progress: CrawlProgress) => void;
@@ -15,12 +16,14 @@ interface CrawlStore {
 export const useCrawlStore = create<CrawlStore>((set) => ({
   progress: null,
   generatedContent: null,
+  isStartingNewCrawl: false,
 
   setCrawlProgress: (progress) => set({ progress }),
   
   setGeneratedContent: (content) => set({ generatedContent: content }),
 
   startCrawl: async (request: CrawlRequest) => {
+    set({ isStartingNewCrawl: true });
     try {
       const response = await fetch('/api/crawl', {
         method: 'POST',
@@ -93,10 +96,14 @@ export const useCrawlStore = create<CrawlStore>((set) => ({
       };
 
       // Start polling after a brief delay to ensure job is saved in database
-      setTimeout(pollProgress, 500);
+      setTimeout(() => {
+        set({ isStartingNewCrawl: false });
+        pollProgress();
+      }, 500);
     } catch (error) {
       console.error('Error starting crawl:', error);
       set({
+        isStartingNewCrawl: false,
         progress: {
           status: 'error',
           totalPages: 0,
@@ -110,5 +117,5 @@ export const useCrawlStore = create<CrawlStore>((set) => ({
     }
   },
 
-  resetCrawl: () => set({ progress: null, generatedContent: null }),
+  resetCrawl: () => set({ progress: null, generatedContent: null, isStartingNewCrawl: false }),
 }));
