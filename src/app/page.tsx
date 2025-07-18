@@ -2,12 +2,21 @@
 
 import { UrlInput } from '@/components/landing/url-input';
 import { CrawlProgress } from '@/components/progress/crawl-progress';
-import { ContentEditor } from '@/components/editor/content-editor';
 import { useCrawlStore } from '@/stores/crawl-store';
 import { CrawlRequest } from '@/types';
+import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 
 export default function Home() {
   const { progress, generatedContent, startCrawl, resetCrawl } = useCrawlStore();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (progress?.status === 'completed' && generatedContent && progress.jobId) {
+      // Use replace instead of push to avoid back button issues
+      router.replace(`/llms?jobId=${progress.jobId}`);
+    }
+  }, [progress, generatedContent, router]);
 
   const handleUrlSubmit = (request: CrawlRequest) => {
     startCrawl(request);
@@ -21,34 +30,8 @@ export default function Home() {
     resetCrawl();
   };
 
-  // Show content editor if crawling is completed and we have content
-  if (progress?.status === 'completed' && generatedContent) {
-    return (
-      <div className="min-h-screen py-8" style={{ background: 'linear-gradient(to bottom right, #E6F9F9, #F9FAFB, #B3F0F0)' }}>
-        <div className="container mx-auto px-4">
-          <div className="mb-6 text-center">
-            <button
-              onClick={handleReset}
-              className="hover:text-primary-600 underline"
-              style={{ color: '#34CCCD' }}
-            >
-              ← Start a new crawl
-            </button>
-          </div>
-          <ContentEditor
-            content={generatedContent}
-            onContentChange={(newContent) => {
-              // In a real app, you might want to update the store
-              console.log('Content changed:', newContent);
-            }}
-          />
-        </div>
-      </div>
-    );
-  }
-
   // Show progress if crawling is in progress
-  if (progress && progress.status !== 'idle') {
+  if (progress && (progress.status === 'crawling' || progress.status === 'processing' || progress.status === 'error')) {
     return (
       <div className="min-h-screen py-8" style={{ background: 'linear-gradient(to bottom right, #E6F9F9, #F9FAFB, #B3F0F0)' }}>
         <div className="container mx-auto px-4">

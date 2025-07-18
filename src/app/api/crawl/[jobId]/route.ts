@@ -18,11 +18,11 @@ export async function GET(
       );
     }
     
-    const progress = getJob(jobId);
+    const progress = await getJob(jobId);
+    console.log(`API Response for job ${jobId}:`, progress);
     
     if (!progress) {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      console.log(`Job not found: ${jobId}. Available jobs:`, Array.from(require('@/lib/crawl-jobs').crawlJobs.keys()));
+      console.log(`Job not found: ${jobId}`);
       return NextResponse.json(
         { error: 'Job not found or expired' },
         { status: 404 }

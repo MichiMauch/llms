@@ -3,7 +3,7 @@ import OpenAI from 'openai';
 import { WebCrawler } from '@/lib/crawler';
 import { CrawlRequest, CrawlProgress, ProcessedPage, LlmsTxtContent } from '@/types';
 import { generateJobId } from '@/lib/utils';
-import { crawlJobs } from '@/lib/crawl-jobs';
+import { createJob, updateJob } from '@/lib/crawl-jobs';
 import { getAIGeneratedMarkdown } from '@/lib/openai-generator';
 import { generateLlmsFullTxtMarkdown } from '@/lib/llms-generator';
 
@@ -34,26 +34,19 @@ export async function POST(request: NextRequest) {
     const jobId = generateJobId();
     
     console.log(`Creating new crawl job: ${jobId} for URL: ${crawlRequest.url} from IP: ${clientIP}`);
-    console.log(`Jobs before creation:`, Array.from(crawlJobs.keys()));
     
-    // Initialize the crawl job
-    const initialProgress: CrawlProgress = {
+    // Initialize the crawl job in database
+    await createJob(jobId);
+    await updateJob(jobId, {
       status: 'crawling',
       totalPages: 0,
       processedPages: 0,
       currentPage: crawlRequest.url,
       errors: [],
       estimatedTimeRemaining: 0,
-      jobId,
-    };
-
-    crawlJobs.set(jobId, initialProgress);
-    console.log(`Job ${jobId} stored. Total jobs in memory: ${crawlJobs.size}`);
-    console.log(`Jobs after creation:`, Array.from(crawlJobs.keys()));
+    });
     
-    // Verify job is immediately accessible
-    const verifyJob = crawlJobs.get(jobId);
-    console.log(`Immediate verification of job ${jobId}:`, verifyJob ? 'FOUND' : 'NOT FOUND');
+    console.log(`Job ${jobId} created and stored in database`);
 
     // Start crawling in the background
     setImmediate(() => startCrawling(jobId, crawlRequest, clientIP));
@@ -79,39 +72,31 @@ async function startCrawling(jobId: string, request: CrawlRequest, clientIP?: st
     const startTime = Date.now();
     
     // Add a maximum timeout to prevent hanging jobs
-    const timeoutId = setTimeout(() => {
+    const timeoutId = setTimeout(async () => {
       console.log(`Job ${jobId} timed out after 10 minutes`);
-      const currentProgress = crawlJobs.get(jobId);
-      if (currentProgress && currentProgress.status === 'crawling') {
-        crawlJobs.set(jobId, {
-          ...currentProgress,
-          status: 'error',
-          errors: [...currentProgress.errors, {
-            url: request.url,
-            error: 'Crawl operation timed out after 10 minutes',
-            timestamp: new Date(),
-          }],
-        });
-      }
+      await updateJob(jobId, {
+        status: 'error',
+        errors: [{
+          url: request.url,
+          error: 'Crawl operation timed out after 10 minutes',
+          timestamp: new Date(),
+        }],
+      });
     }, 600000); // 10 minutes timeout
     
-    const pages = await crawler.crawl(request, (progress) => {
+    const pages = await crawler.crawl(request, async (progress) => {
       console.log(`Job ${jobId} progress:`, progress);
-      const currentProgress = crawlJobs.get(jobId);
-      if (currentProgress) {
-        const elapsed = (Date.now() - startTime) / 1000;
-        const rate = progress.processedPages / elapsed;
-        const estimatedTotal = Math.max(progress.totalPages, progress.processedPages * 2);
-        const remaining = estimatedTotal - progress.processedPages;
-        const estimatedTimeRemaining = rate > 0 ? Math.round(remaining / rate) : 0;
+      const elapsed = (Date.now() - startTime) / 1000;
+      const rate = progress.processedPages / elapsed;
+      const estimatedTotal = Math.max(progress.totalPages, progress.processedPages * 2);
+      const remaining = estimatedTotal - progress.processedPages;
+      const estimatedTimeRemaining = rate > 0 ? Math.round(remaining / rate) : 0;
 
-        crawlJobs.set(jobId, {
-          ...currentProgress,
-          ...progress,
-          estimatedTimeRemaining,
-          errors: crawler.getErrors(),
-        });
-      }
+      await updateJob(jobId, {
+        ...progress,
+        estimatedTimeRemaining,
+        errors: crawler.getErrors(),
+      });
     });
 
     console.log(`Job ${jobId} crawling completed. Found ${pages.length} pages.`);
@@ -120,15 +105,11 @@ async function startCrawling(jobId: string, request: CrawlRequest, clientIP?: st
     clearTimeout(timeoutId);
 
     // Process and categorize the results
-    const currentProgress = crawlJobs.get(jobId);
-    if (currentProgress) {
-      console.log(`Job ${jobId} switching to processing status`);
-      crawlJobs.set(jobId, {
-        ...currentProgress,
-        status: 'processing',
-        currentPage: 'Generating llms.txt...',
-      });
-    }
+    console.log(`Job ${jobId} switching to processing status`);
+    await updateJob(jobId, {
+      status: 'processing',
+      currentPage: 'Generating llms.txt...',
+    });
 
     // Generate llms.txt content using AI directly
     console.log(`Job ${jobId} starting AI generation`);
@@ -137,7 +118,8 @@ async function startCrawling(jobId: string, request: CrawlRequest, clientIP?: st
 
     // Save to database
     try {
-      const { db, schema } = await import('@/lib/db');
+      const { getDb, schema } = await import('@/lib/db');
+      const db = getDb();
       const llmsTxt = getAIGeneratedMarkdown(generatedContent);
       const llmsFullTxt = generateLlmsFullTxtMarkdown(generatedContent);
       
@@ -156,36 +138,25 @@ async function startCrawling(jobId: string, request: CrawlRequest, clientIP?: st
     }
 
     // Mark as completed
-    const finalProgress = crawlJobs.get(jobId);
-    if (finalProgress) {
-      console.log(`Job ${jobId} marking as completed`);
-      crawlJobs.set(jobId, {
-        ...finalProgress,
-        status: 'completed',
-        currentPage: 'Completed',
-        estimatedTimeRemaining: 0,
-        generatedContent,
-      });
-    }
+    console.log(`Job ${jobId} marking as completed`);
+    await updateJob(jobId, {
+      status: 'completed',
+      currentPage: 'Completed',
+      estimatedTimeRemaining: 0,
+      generatedContent,
+    });
 
   } catch (error) {
     console.error(`Error in crawl job ${jobId}:`, error);
     console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
-    const currentProgress = crawlJobs.get(jobId);
-    if (currentProgress) {
-      crawlJobs.set(jobId, {
-        ...currentProgress,
-        status: 'error',
-        errors: [
-          ...currentProgress.errors,
-          {
-            url: request.url,
-            error: error instanceof Error ? error.message : 'Unknown error',
-            timestamp: new Date(),
-          },
-        ],
-      });
-    }
+    await updateJob(jobId, {
+      status: 'error',
+      errors: [{
+        url: request.url,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date(),
+      }],
+    });
   }
 }
 

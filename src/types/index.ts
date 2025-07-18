@@ -23,7 +23,7 @@ export interface CrawlError {
 }
 
 export interface CrawlProgress {
-  status: 'idle' | 'crawling' | 'processing' | 'completed' | 'error';
+  status: 'idle' | 'pending' | 'crawling' | 'processing' | 'completed' | 'error';
   totalPages: number;
   processedPages: number;
   currentPage: string;
@@ -31,6 +31,7 @@ export interface CrawlProgress {
   estimatedTimeRemaining: number;
   jobId: string;
   generatedContent?: LlmsTxtContent;
+  timestamp?: number;
 }
 
 export interface LlmsTxtStructure {

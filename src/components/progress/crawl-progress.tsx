@@ -1,5 +1,3 @@
-'use client';
-
 import { CrawlProgress as CrawlProgressType } from '@/types';
 
 interface CrawlProgressProps {
@@ -30,15 +28,17 @@ export function CrawlProgress({ progress, onCancel }: CrawlProgressProps) {
     <div className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(to bottom right, #E6F9F9, #F9FAFB, #B3F0F0)' }}>
       <div className="text-center space-y-6">
         {/* Paul AI Robot Animation */}
-        <div className="flex justify-center">
-          <img 
-            src="/paul-1.gif" 
-            alt="Paul AI is working..." 
-            width="120" 
-            height="120"
-            className="object-contain"
-          />
-        </div>
+        {progress.status !== 'completed' && (
+          <div className="flex justify-center">
+            <img 
+              src="/paul-1.gif" 
+              alt="Paul AI is working..." 
+              width="120" 
+              height="120"
+              className="object-contain"
+            />
+          </div>
+        )}
         
         {/* Status text */}
         <div className="space-y-2">
@@ -51,7 +51,7 @@ export function CrawlProgress({ progress, onCancel }: CrawlProgressProps) {
         </div>
         
         {/* Simple progress indicator */}
-        {progress.totalPages > 0 && (
+        {progress.totalPages > 0 && progress.status !== 'completed' && (
           <div className="text-sm text-gray-500">
             {progress.processedPages} / {progress.totalPages} pages processed
           </div>

@@ -44,8 +44,13 @@ export const useCrawlStore = create<CrawlStore>((set) => ({
 
             if (progress.status === 'completed' && progress.generatedContent) {
               set({ generatedContent: progress.generatedContent });
+              // Stop polling when completed
+              return;
+            } else if (progress.status === 'error') {
+              // Stop polling on error
+              return;
             } else if (progress.status === 'crawling' || progress.status === 'processing') {
-              setTimeout(pollProgress, 2000); // Increase interval to 2 seconds
+              setTimeout(pollProgress, 2000); // Continue polling
             }
           } else if (progressResponse.status === 404) {
             console.warn(`Job ${jobId} not found on server`);

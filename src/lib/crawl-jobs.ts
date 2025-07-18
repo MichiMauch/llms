@@ -1,55 +1,86 @@
+import { getDb, schema } from '@/lib/db';
 import { CrawlProgress } from '@/types';
+import { eq } from 'drizzle-orm';
 
-// Global storage that survives hot reloads in development
-declare global {
-  var __crawlJobs: Map<string, CrawlProgress> | undefined;
-}
-
-// In-memory storage for crawl jobs (in production, use Redis or a database)
-// Use global variable in development to survive hot reloads
-export const crawlJobs = globalThis.__crawlJobs ?? new Map<string, CrawlProgress>();
-if (process.env.NODE_ENV === 'development') {
-  globalThis.__crawlJobs = crawlJobs;
-}
-
-// Track cleanup interval to prevent multiple intervals in development
-declare global {
-  var __cleanupInterval: NodeJS.Timeout | undefined;
-}
-
-// Initialize cleanup only once - but with longer retention for development
-if (!globalThis.__cleanupInterval) {
-  globalThis.__cleanupInterval = setInterval(() => {
-    const now = Date.now();
-    let cleanedCount = 0;
-    for (const [jobId, progress] of crawlJobs.entries()) {
-      // Extract timestamp from jobId (first part before the random string)
-      try {
-        const timestampHex = jobId.substring(0, 11); // Timestamp part in base36
-        const createdAt = parseInt(timestampHex, 36);
-        // Increase retention time to 2 hours for development
-        if (now - createdAt > 7200000) { // 2 hours
-          crawlJobs.delete(jobId);
-          cleanedCount++;
-        }
-      } catch (error) {
-        // If parsing fails and job is very old, clean it up
-        console.warn(`Could not parse timestamp from jobId: ${jobId}`, error);
-        // Keep jobs that we can't parse timestamp for, to be safe
-      }
-    }
-    if (cleanedCount > 0) {
-      console.log(`Cleaned up ${cleanedCount} old jobs. Current job count: ${crawlJobs.size}`);
-    }
-  }, 600000); // Clean every 10 minutes (less frequent)
+// Helper function to create a new job
+export async function createJob(jobId: string): Promise<void> {
+  const db = getDb();
+  const initialProgress: CrawlProgress = {
+    jobId,
+    status: 'pending',
+    totalPages: 0,
+    processedPages: 0,
+    currentPage: '',
+    errors: [],
+    estimatedTimeRemaining: 0,
+    generatedContent: undefined,
+    timestamp: Date.now(),
+  };
+  await db.insert(schema.crawlProgress).values({
+    jobId: initialProgress.jobId,
+    status: initialProgress.status,
+    totalPages: initialProgress.totalPages,
+    processedPages: initialProgress.processedPages,
+    currentPage: initialProgress.currentPage,
+    estimatedTimeRemaining: initialProgress.estimatedTimeRemaining,
+    timestamp: initialProgress.timestamp || Date.now(),
+    errors: JSON.stringify(initialProgress.errors),
+    generatedContent: initialProgress.generatedContent ? JSON.stringify(initialProgress.generatedContent) : null,
+  });
 }
 
 // Add helper function to check if job exists
-export function jobExists(jobId: string): boolean {
-  return crawlJobs.has(jobId);
+export async function jobExists(jobId: string): Promise<boolean> {
+  const db = getDb();
+  const job = await db.query.crawlProgress.findFirst({
+    where: eq(schema.crawlProgress.jobId, jobId),
+  });
+  return !!job;
 }
 
 // Add helper function to get job safely
-export function getJob(jobId: string): CrawlProgress | null {
-  return crawlJobs.get(jobId) || null;
+export async function getJob(jobId: string): Promise<CrawlProgress | null> {
+  const db = getDb();
+  const job = await db.query.crawlProgress.findFirst({
+    where: eq(schema.crawlProgress.jobId, jobId),
+  });
+  console.log(`getJob: Retrieved job ${jobId} with status: ${job?.status}`);
+  if (!job) {
+    return null;
+  }
+  return {
+    jobId: job.jobId,
+    status: job.status as CrawlProgress['status'],
+    totalPages: job.totalPages || 0,
+    processedPages: job.processedPages || 0,
+    currentPage: job.currentPage || '',
+    estimatedTimeRemaining: job.estimatedTimeRemaining || 0,
+    timestamp: job.timestamp,
+    errors: JSON.parse(job.errors as string),
+    generatedContent: job.generatedContent ? JSON.parse(job.generatedContent as string) : undefined,
+  };
+}
+
+// Helper function to update job progress
+export async function updateJob(jobId: string, updates: Partial<CrawlProgress>): Promise<void> {
+  const db = getDb();
+  const updatePayload: Record<string, unknown> = { ...updates, timestamp: Date.now() };
+
+  if (updates.errors !== undefined) {
+    updatePayload.errors = JSON.stringify(updates.errors);
+  }
+  if (updates.generatedContent !== undefined) {
+    updatePayload.generatedContent = updates.generatedContent ? JSON.stringify(updates.generatedContent) : null;
+  }
+
+  await db.update(schema.crawlProgress)
+    .set(updatePayload)
+    .where(eq(schema.crawlProgress.jobId, jobId));
+}
+
+// Cleanup old jobs (e.g., jobs older than 2 hours)
+export async function cleanupOldJobs(): Promise<void> {
+  const db = getDb();
+  const twoHoursAgo = Date.now() - (2 * 60 * 60 * 1000);
+  await db.delete(schema.crawlProgress).where(eq(schema.crawlProgress.timestamp, twoHoursAgo));
 }
