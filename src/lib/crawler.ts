@@ -1,4 +1,3 @@
-import puppeteer, { Browser, Page } from 'puppeteer';
 import * as cheerio from 'cheerio';
 import TurndownService from 'turndown';
 import { ProcessedPage, CrawlRequest, CrawlError } from '@/types';
@@ -23,39 +22,24 @@ export class WebCrawler {
   }
 
   async crawl(request: CrawlRequest, onProgress?: (progress: { processedPages: number; currentPage: string; totalPages: number }) => void): Promise<ProcessedPage[]> {
-    const browser = await puppeteer.launch({
-      headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--no-first-run',
-        '--no-zygote',
-        '--single-process',
-        '--disable-gpu'
-      ],
-    });
-
     try {
       const startUrl = new URL(request.url);
       const baseDomain = startUrl.hostname;
       
       // Smart crawling strategy: First crawl ONLY homepage
       console.log('Smart crawling: Starting with homepage only');
-      await this.crawlSinglePage(browser, request.url, onProgress);
+      await this.crawlSinglePage(request.url, onProgress);
 
       // If we have a good homepage with sufficient content, look for key pages only
       const homepage = this.processedPages.find(p => p.url === request.url || p.url.replace(/\/$/, '') === request.url.replace(/\/$/, ''));
       if (homepage && homepage.wordCount > 200) {
         console.log(`Homepage has ${homepage.wordCount} words, looking for key pages only`);
-        await this.smartCrawlKeyPages(browser, request.url, baseDomain, request, onProgress);
+        await this.smartCrawlKeyPages(request.url, baseDomain, request, onProgress);
       } else {
         // Fallback to limited crawling
         console.log('Homepage insufficient, doing limited regular crawl');
         const limitedRequest = { ...request, maxDepth: 1 }; // Only depth 1
         await this.crawlUrl(
-          browser,
           request.url,
           baseDomain,
           limitedRequest,
@@ -65,13 +49,13 @@ export class WebCrawler {
       }
 
       return this.processedPages;
-    } finally {
-      await browser.close();
+    } catch (error) {
+      console.error('Error in crawl:', error);
+      throw error;
     }
   }
 
   private async crawlUrl(
-    browser: Browser,
     url: string,
     baseDomain: string,
     request: CrawlRequest,
@@ -90,27 +74,34 @@ export class WebCrawler {
     this.visitedUrls.add(url);
     
     try {
-      const page = await browser.newPage();
+      console.log(`Fetching URL: ${url}`);
       
-      // Set reasonable timeouts and user agent
-      await page.setUserAgent('Mozilla/5.0 (compatible; LLMsTxtGenerator/1.0)');
-      await page.setViewport({ width: 1280, height: 720 });
-      
-      const response = await page.goto(url, {
-        waitUntil: 'networkidle0',
-        timeout: 30000,
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; LLMsTxtGenerator/1.0)',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.5',
+          'Accept-Encoding': 'gzip, deflate',
+          'Connection': 'keep-alive',
+        },
+        signal: AbortSignal.timeout(30000), // 30 second timeout
       });
 
-      if (!response || !response.ok()) {
-        throw new Error(`HTTP ${response?.status() || 'unknown'}: Failed to load page`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: Failed to load page`);
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('text/html')) {
+        throw new Error(`Invalid content type: ${contentType}`);
       }
 
       // Extract content and metadata
-      const content = await page.content();
-      const title = await page.title();
+      const html = await response.text();
+      const title = this.extractTitle(html);
       
       // Process the page content
-      const processedPage = await this.processPage(url, title, content);
+      const processedPage = await this.processPage(url, title, html);
       if (processedPage) {
         this.processedPages.push(processedPage);
         
@@ -122,13 +113,11 @@ export class WebCrawler {
       }
 
       // Extract links for further crawling
-      const links = await this.extractLinks(page, baseDomain);
-      await page.close();
+      const links = this.extractLinksFromHtml(html, baseDomain);
 
       // Recursively crawl found links
       for (const link of links) {
         await this.crawlUrl(
-          browser,
           link,
           baseDomain,
           request,
@@ -239,30 +228,43 @@ export class WebCrawler {
     }
   }
 
-  private async extractLinks(page: Page, baseDomain: string): Promise<string[]> {
+  private extractLinksFromHtml(html: string, baseDomain: string): string[] {
     try {
-      const links = await page.evaluate((domain) => {
-        const anchors = Array.from(document.querySelectorAll('a[href]'));
-        return anchors
-          .map(anchor => (anchor as HTMLAnchorElement).href)
-          .filter(href => {
-            try {
-              const url = new URL(href);
-              return url.hostname === domain && 
-                     !href.includes('#') && 
-                     !href.includes('mailto:') &&
-                     !href.includes('tel:') &&
-                     !href.match(/\.(pdf|doc|docx|xls|xlsx|ppt|pptx|zip|rar|exe)$/i);
-            } catch {
-              return false;
+      const $ = cheerio.load(html);
+      const links: string[] = [];
+      
+      $('a[href]').each((_, element) => {
+        const href = $(element).attr('href');
+        if (href) {
+          try {
+            const url = new URL(href, `https://${baseDomain}`);
+            if (url.hostname === baseDomain && 
+                !href.includes('#') && 
+                !href.includes('mailto:') &&
+                !href.includes('tel:') &&
+                !href.match(/\.(pdf|doc|docx|xls|xlsx|ppt|pptx|zip|rar|exe)$/i)) {
+              links.push(url.href);
             }
-          });
-      }, baseDomain);
+          } catch {
+            // Invalid URL, skip it
+          }
+        }
+      });
 
       return Array.from(new Set(links));
     } catch (error) {
       console.error('Error extracting links:', error);
       return [];
+    }
+  }
+
+  private extractTitle(html: string): string {
+    try {
+      const $ = cheerio.load(html);
+      return $('title').text() || 'Untitled';
+    } catch (error) {
+      console.error('Error extracting title:', error);
+      return 'Untitled';
     }
   }
 
@@ -386,7 +388,6 @@ export class WebCrawler {
   }
 
   private async smartCrawlKeyPages(
-    browser: Browser,
     baseUrl: string,
     baseDomain: string,
     request: CrawlRequest,
@@ -446,29 +447,31 @@ export class WebCrawler {
             totalPages: this.processedPages.length + keyUrls.length - successful
           });
 
-          const page = await browser.newPage();
-          
           try {
-            await page.goto(url, { 
-              waitUntil: 'networkidle0',
-              timeout: 10000 // Reduced timeout for key pages
+            const response = await fetch(url, {
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (compatible; LLMsTxtGenerator/1.0)',
+              },
+              signal: AbortSignal.timeout(10000), // 10 second timeout for key pages
             });
 
-            const title = await page.title();
-            const html = await page.content();
-            
-            const processedPage = await this.processPage(url, title, html);
-            if (processedPage && processedPage.wordCount > 100) {
-              this.processedPages.push(processedPage);
-              this.visitedUrls.add(url);
-              successful++;
-              console.log(`Successfully crawled key page: ${url} (${processedPage.wordCount} words)`);
+            if (response.ok) {
+              const html = await response.text();
+              const title = this.extractTitle(html);
+              
+              const processedPage = await this.processPage(url, title, html);
+              if (processedPage && processedPage.wordCount > 100) {
+                this.processedPages.push(processedPage);
+                this.visitedUrls.add(url);
+                successful++;
+                console.log(`Successfully crawled key page: ${url} (${processedPage.wordCount} words)`);
+              }
+            } else {
+              console.log(`Key page not found: ${url} (${response.status})`);
             }
           } catch (error) {
             console.log(`Key page not found or error: ${url}`);
             // Don't add to errors, it's expected that some key pages don't exist
-          } finally {
-            await page.close();
           }
         }
       } catch (error) {
@@ -480,7 +483,6 @@ export class WebCrawler {
   }
 
   private async crawlSinglePage(
-    browser: Browser,
     url: string,
     onProgress?: (progress: { processedPages: number; currentPage: string; totalPages: number }) => void
   ): Promise<void> {
@@ -496,16 +498,20 @@ export class WebCrawler {
       totalPages: 1
     });
 
-    const page = await browser.newPage();
-    
     try {
-      await page.goto(url, { 
-        waitUntil: 'networkidle0',
-        timeout: 15000
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; LLMsTxtGenerator/1.0)',
+        },
+        signal: AbortSignal.timeout(15000), // 15 second timeout
       });
 
-      const title = await page.title();
-      const html = await page.content();
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: Failed to load page`);
+      }
+
+      const html = await response.text();
+      const title = this.extractTitle(html);
       
       const processedPage = await this.processPage(url, title, html);
       if (processedPage) {
@@ -520,8 +526,6 @@ export class WebCrawler {
         error: error instanceof Error ? error.message : 'Unknown error',
         timestamp: new Date(),
       });
-    } finally {
-      await page.close();
     }
   }
 }
